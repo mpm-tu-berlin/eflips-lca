@@ -1,0 +1,35 @@
+[project]
+name = "eflips-lca"
+version = "0.1.0"
+description = "Life Cycle Assessment for the eFLIPS series of bus simulations."
+authors = [
+    {name = "Ludger Heide", email = "ludger.heide@tu-berlin.de"},
+    {name = "Shuyao Guo", email = "shuyao.guo@tu-berlin.de"},
+    {name = "Anne Syré", email = "a.syre@tu-berlin.de"}
+]
+readme = "README.md"
+homepage = "https://github.com/mpm-tu-berlin/eflips-lca"
+repository = "https://github.com/mpm-tu-berlin/eflips-lca"
+include= ["LICENSE.md"]
+license = {text = "AGPL-3.0-or-later"}
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "eflips-model @ git+https://github.com/mpm-tu-berlin/eflips-model.git@feature/eflips-lca",
+    "eflips-eval (>=1.9.0,<2.0.0)"
+]
+
+[dependency-groups]
+dev = [
+    "mypy (>=1.19.1,<2.0.0)",
+    "black (>=26.1.0,<27.0.0)",
+    "pre-commit (>=4.5.1,<5.0.0)",
+    "pytest (>=9.0.2,<10.0.0)",
+    "pytest-pycharm (>=0.7.0,<0.8.0)"
+]
+
+[tool.poetry]
+packages = [{ include = "eflips/lca" }]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
