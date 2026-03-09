@@ -19,6 +19,13 @@ from eflips.lca.extraction import (
     VehicleTypeSimData,
     extract_simulation_data,
 )
+from eflips.lca.open_lca_data import (
+    OpenLcaData,
+    VehicleTypeOverrides,
+    YearSeries,
+    populate_lca_params_from_data,
+    populate_lca_params_from_file,
+)
 from eflips.lca.util import DefaultImpactVector, ImpactVector
 
 __all__ = [
@@ -34,4 +41,9 @@ __all__ = [
     "StationSimData",
     "extract_simulation_data",
     "calculate_lca",
+    "OpenLcaData",
+    "YearSeries",
+    "VehicleTypeOverrides",
+    "populate_lca_params_from_data",
+    "populate_lca_params_from_file",
 ]

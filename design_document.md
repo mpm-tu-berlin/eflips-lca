@@ -735,7 +735,7 @@ These can be compared between BEB and ICEB scenarios, or used for sensitivity an
 
 ## Part 3: openLCA Integration
 
-This module connects to an openLCA IPC server (via the `olca-ipc` Python package) to query ecoinvent processes and automatically populate the `lca_params` JSONB columns.
+This section describes how openLCA-derived emission factors are mapped to ecoinvent processes, stored in an intermediate JSON format, and populated into eflips-model `lca_params` columns.
 
 ### 3.1 Ecoinvent Process Mapping
 
@@ -773,39 +773,60 @@ The 8 impact categories map to the following LCIA methods in ecoinvent/openLCA:
 | `fuel` | Fossil resource depletion (kg Oil eq) |
 | `water` | Water consumption (m³) |
 
-### 3.3 Populate Workflow
+### 3.3 Intermediate Data Layer
 
-```python
-def populate_lca_params(
-    vehicle_type: VehicleType,
-    battery_type: BatteryType | None,
-    ipc_client: olca.Client,
-) -> None:
-    """
-    Queries openLCA via IPC for the relevant processes,
-    extracts impact category results, and writes them
-    into the lca_params JSONB columns.
-    """
-    # 1. Query per-kg chassis emission factors
-    #    (from bus production process, minus diesel engine, divided by mass)
-    # 2. Query motor emission factors based on energy_source:
-    #    - BATTERY_ELECTRIC: per-kg from electric motor process
-    #    - DIESEL: assemble from Al/PE/Steel material processes
-    # 3. If battery_type is set:
-    #    - Determine chemistry from battery_type.chemistry (str)
-    #    - Query per-kg battery emission factors for that chemistry
-    # 4. Query electricity emission factors per kWh (for BEB)
-    # 5. Query diesel production + combustion factors (for ICEB)
-    # 6. Query maintenance factors for this energy_source
-    # 7. Assemble into VehicleTypeLcaParams, validate via __post_init__
-    # 8. Write back via SQLAlchemy (asdict() -> JSONB)
+To decouple LCA calculations from a running openLCA instance, an intermediate data layer stores all openLCA-derived emission factors in git-tracked JSON files.
+
+**Data Flow:**
+
+```
+openLCA (offline, manual) --> bin/export_openlca.py --> data/*.json (git-tracked)
+                                                             |
+                                              populate_lca_params_from_file()
+                                                             |
+                                              lca_params JSONB on eflips-model
+                                                             |
+                                              calculation.py (unchanged)
 ```
 
-### 3.4 Custom Processes
+**`OpenLcaData` Structure:**
+
+The `OpenLcaData` dataclass (`eflips/lca/open_lca_data.py`) captures all 14 ImpactVectors from openLCA plus scalar/literature parameters:
+
+- **Metadata**: `ecoinvent_version`, `lcia_method_set`, `description`, `created_at`
+- **14 emission factor ImpactVectors**: chassis, electric motor, diesel motor, LFP battery, NMC battery, electricity (year-varying), diesel production, diesel combustion, ICEB maintenance, BEB maintenance, control unit, power unit, user unit, concrete
+- **Scalar parameters**: motor power-to-weight ratio, diesel motor mass, vehicle/battery/infrastructure lifetimes, efficiencies, power unit specs, user unit mass, foundation volume
+
+**Year-Specific Values with Interpolation:**
+
+The `YearSeries` dataclass wraps `dict[int, DefaultImpactVector]` and provides `at_year(year)`:
+
+- **Exact match**: returns the stored vector directly
+- **Between two years**: linear interpolation using ImpactVector arithmetic (`iv_lo * (1-t) + iv_hi * t`)
+- **Outside range**: clamps to nearest data point and emits `warnings.warn()`
+
+This supports year-varying electricity emission factors that change with the grid mix over time.
+
+**JSON Format:**
+
+Files are stored in `data/` with naming convention `openlca_data_<descriptive_name>.json`. The JSON structure mirrors the `OpenLcaData` dataclass, with `YearSeries` fields using string year keys (JSON requirement). All ImpactVectors are serialized as `{field_name: float}` dicts.
+
+**Two-Step Workflow:**
+
+1. **Export** (offline): Run `bin/export_openlca.py` to connect to openLCA IPC, query all processes, and write an `OpenLcaData` JSON file. This step requires openLCA.
+2. **Populate** (runtime): Call `populate_lca_params_from_file(session, scenario_id, json_path, year, vehicle_type_overrides)` to build `lca_params` from the JSON file. This step does not require openLCA.
+
+`VehicleTypeOverrides` provides per-bus-model values not from openLCA (motor power, consumption) that must be specified at populate time.
+
+### 3.4 Export Script
+
+The `bin/export_openlca.py` script contains the `LCIA_METHOD_MAPPING` and `ECOINVENT_PROCESS_MAPPING` and provides a CLI to produce `OpenLcaData` JSON files. It is a standalone script, not a library module.
+
+### 3.5 Custom Processes
 
 Some processes are not available as standard ecoinvent entries and have been created as custom processes within openLCA:
 
 - **Diesel motor**: Assembled from aluminum, polyethylene, and steel production processes weighted by mass fraction (2% Al, 9% PE, 89% steel of 1,900 kg total).
 - **Charging infrastructure** (Control Unit, Power Unit): Created by a prior thesis (Tritium system architecture) and stored in an openLCA database; referenced by their custom process names.
 
-The populate function should check for the existence of these custom processes and raise clear errors if they are missing from the connected openLCA instance.
+The export script (``bin/export_openlca.py``) should check for the existence of these custom processes and raise clear errors if they are missing from the connected openLCA instance.

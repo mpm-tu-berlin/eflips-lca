@@ -9,16 +9,20 @@ eflips/lca/
   __init__.py              # Public API re-exports
   util.py                  # ImpactVector / DefaultImpactVector (8-category dataclass with generic arithmetic)
   dataclasses.py           # VehicleTypeLcaParams, BatteryTypeLcaParams, ChargingPointTypeLcaParams, LcaResult
-  extraction.py            # Queries eflips-model DB for vehicle-km, revenue-km, fleet size, peak charging
+  extraction.py            # Queries eflips-model DB for simulation data
   calculation.py           # LCA formulas: production+EoL, use phase, charging infrastructure
-  parameter_generation.py  # Helpers to build param dataclasses + openLCA placeholder
+  open_lca_data.py         # OpenLcaData / YearSeries / VehicleTypeOverrides + populate_lca_params_from_data/file
+bin/
+  export_openlca.py        # CLI script to export openLCA data to JSON (scaffolding, not yet implemented)
+data/
+  .gitkeep                 # Git-tracked directory for openLCA JSON files
 EFLIPS_MODEL_CHANGES.md    # Instructions for adding lca_params JSONB columns to eflips-model
 design_document.md         # Full methodology and formulas
 ```
 
 ## How it works
 
-1. **Parameters** (`lca_params` JSONB on `VehicleType`, `BatteryType`, `ChargingPointType`) hold emission factors and physical constants. These don't exist in eflips-model yet — see `EFLIPS_MODEL_CHANGES.md`.
+1. **Parameters** (`lca_params` JSONB on `VehicleType`, `BatteryType`, `ChargingPointType`) hold emission factors and physical constants. These don't exist in eflips-model yet — see `EFLIPS_MODEL_CHANGES.md`. Parameters can be populated from git-tracked JSON files via `OpenLcaData` (`open_lca_data.py`), which supports year-specific electricity emission factors with interpolation.
 2. **Extraction** (`extraction.py`) queries an eflips-model database for simulation outputs: vehicle-km, revenue-km, `n_ready`, peak charging power/occupancy. Energy/diesel consumption is *not* extracted from events — it's computed from `average_consumption_kwh_per_km` (or `diesel_consumption_kg_per_km`) in lca_params times vehicle-km, because LCA uses average consumption, not worst-case simulation values.
 3. **Calculation** (`calculation.py`) implements three lifecycle phases:
    - **Production+EoL**: chassis (mass-based), motor (mass or per-unit), battery (mass-based), amortised over lifetimes, normalised by revenue-km

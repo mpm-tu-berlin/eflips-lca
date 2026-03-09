@@ -207,7 +207,7 @@ def calculate_battery_emissions(
 
     if battery_type.lca_params is None:
         raise ValueError(f"BatteryType {battery_type.id} has no lca_params set.")
-    bt_params = BatteryTypeLcaParams.from_dict(battery_type.lca_params) 
+    bt_params = BatteryTypeLcaParams.from_dict(battery_type.lca_params)
 
     # Consistency check
     tco_life = None
@@ -511,10 +511,10 @@ def calculate_lca(
             logger.warning("VehicleType %d has no simulation data, skipping.", vtype_id)
             continue
 
-        if vtype.lca_params is None: 
+        if vtype.lca_params is None:
             raise ValueError(f"VehicleType {vtype_id} has no lca_params set.")
         params = VehicleTypeLcaParams.from_dict(
-            vtype.lca_params, energy_source=vtype.energy_source 
+            vtype.lca_params, energy_source=vtype.energy_source
         )
 
         battery_type: BatteryType | None = vtype.battery_type
@@ -539,8 +539,8 @@ def calculate_lca(
         e_motor = calculate_motor_emissions(vtype.energy_source, params)
 
         bt_lifetime: float | None = None
-        if battery_type is not None and battery_type.lca_params is not None: 
-            bt_params = BatteryTypeLcaParams.from_dict(battery_type.lca_params) 
+        if battery_type is not None and battery_type.lca_params is not None:
+            bt_params = BatteryTypeLcaParams.from_dict(battery_type.lca_params)
             bt_lifetime = bt_params.battery_lifetime_years
 
         e_prod_annual = amortize_production(
